@@ -1,6 +1,7 @@
 {
   lib,
   writeScript,
+  runtimeShell,
   stdenv,
   fetchurl,
   alsa-lib,
@@ -153,10 +154,20 @@ stdenv.mkDerivation rec {
     mkdir -p "$out/bin" "$out/share/applications"
     cp -r opt "$out"
 
-    ln -s "$out/opt/Webex/bin/CiscoCollabHost" "$out/bin/webex"
+    # Wrap Webex to prevent selfupdate
+    cat > "$out/bin/webex" <<EOF
+    #!${runtimeShell}
+    launcher="\''${HOME:?}/.local/share/WebexLauncher"
+    rm -rf "\$launcher"/libWebexVersionSelector.so "\$launcher"/lib "\$launcher"/[0-9]*_*
+    exec $out/opt/Webex/bin/CiscoCollabHost "\$@"
+    EOF
     chmod +x $out/bin/webex
 
     mv "$out/opt/Webex/bin/webex.desktop" "$out/share/applications/webex.desktop"
+
+    # Launch through wrapper
+    substituteInPlace "$out/share/applications/webex.desktop" \
+      --replace-fail "$out/opt/Webex/bin/CiscoCollabHost" "$out/bin/webex"
   '';
 
   passthru.updateScript = writeScript "webex-update-script" ''
